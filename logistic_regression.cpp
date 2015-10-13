@@ -69,14 +69,14 @@ void plot(Mat & image){
 	line(image,Point(50,50),Point(60,50),255,1,LINE_AA);
 }
 
-void DrawPoint(Mat& image,int x,int y){
+void DrawPoint(Mat& image,float x,float y){
 	Point center;
 	center.x = x * 5 + 50;
 	center.y = 550 - y * 5;
 	circle(image,center,1,255,2,LINE_AA);
 }
 
-void DrawX(Mat& image,int _x,int _y){
+void DrawX(Mat& image,float _x,float _y){
     int x = _x * 5 + 50;
     int y = 550 - _y * 5;
     image.at<uchar>(y-1,x-1) = 255;
@@ -97,28 +97,56 @@ void DrawX(Mat& image,int _x,int _y){
     image.at<uchar>(y,x) = 255;
 }
 
-float h_x(float* theta,int* x1,int* x2,int i){
+float h_x(float* theta,float* x1,float* x2,int i){
     float theta_x = theta[0] + theta[1] * x1[i] + theta[2] * x2[i];
     float s = 1 / (1 + exp(-theta_x));
     return s;
 }
 
-float J_theta(float* theta,int* x1,int* x2,int* y,int num){
+float J_theta(float* theta,float* x1,float* x2,int* y,int num){
     float J = 0.0;
     for(int i = 0;i < num ;i ++){
-        J += y[i] * log(h_x(theta,x1,x2,i)) + (1-y[i]) * log(1 - h_x(theta,x1,x2,i));
+        J -= y[i] * log(h_x(theta,x1,x2,i)) + (1-y[i]) * log(1 - h_x(theta,x1,x2,i));
     }
-    return J;
+    return J/num;
 }
 
 void DrawLine(Mat& image,float* theta){
     Point A,B;
     A.x = 550;
-    A.y = 550 + ((100*theta[1] + theta[0]) / theta[2]) * 5;
-    B.x = 50 - ((100*theta[2] + theta[0]) / theta[1]) * 5;
+    A.y = 550 + ((100 * theta[1] + theta[0]) / theta[2]) * 5;
+    B.x = 50 - ((100 * theta[2] + theta[0]) / theta[1]) * 5;
     B.y = 50;
     line(image,A,B,255,1,LINE_AA);
     imshow("Coordinate",image);
+}
+
+void Normalize(float* x1,float*x2,int num){
+    float min = 0.0,max = 0.0,gap = 0.0;
+
+    for(int i = 0;i < num;i ++){
+        if(i == 0 || x1[i] < min)
+            min = x1[i];
+        if(i == 0 || x1[i] > max)
+            max = x1[i];
+    }
+    gap = max - min;
+    for(int i = 0;i < num;i ++){
+        x1[i] = (x1[i] - min) / gap;
+        cout<<"x1["<<i<<"]="<<x1[i]<<endl;
+    }
+
+    for(int i = 0;i < num;i ++){
+        if(i == 0 || x2[i] < min)
+            min = x2[i];
+        if(i == 0 || x2[i] > max)
+            max = x2[i];
+    }
+    gap = max - min;
+    for(int i = 0;i < num;i ++){
+        x2[i] = (x2[i] - min) / gap;
+        cout<<"x2["<<i<<"]="<<x2[i]<<endl;
+    }
 }
 
 int main(int argc,char ** argv){
@@ -130,7 +158,8 @@ int main(int argc,char ** argv){
     }
 
     string data[51];
-    int x1[50],x2[50],y[50];
+    float x1[50],x2[50];
+    int y[50];
     int temp1,temp2,temp3;
     int idex = 0;
     int _idex = 0;
@@ -143,12 +172,12 @@ int main(int argc,char ** argv){
         idex = data[i].find_first_of(",",0);
         if(idex == -1)
             return -1;
-        temp1 = atoi(data[i].substr(0,idex).c_str());
+        temp1 = atof(data[i].substr(0,idex).c_str());
 
         _idex = data[i].find_first_of(",",idex + 1);
         if(_idex == -1)
             return -1;
-        temp2 = atoi(data[i].substr(idex + 1,_idex - idex - 1).c_str());
+        temp2 = atof(data[i].substr(idex + 1,_idex - idex - 1).c_str());
 
         temp3 = atoi(data[i].substr(_idex + 1).c_str());
 
@@ -185,39 +214,51 @@ int main(int argc,char ** argv){
         }
     }
 
+    Normalize(x1,x2,i);
+
     float tempJ = 0.0;
     srand((unsigned)time(0));
-    float theta[3];
+    float theta[3] = {0.0,0.0,0.0};
     for(int j = 0;j < 3;j ++){
         int yy = rand() % 100;
         theta[j] = (float)yy / 100;
+        cout<<"theta["<<j<<"]:"<<theta[j]<<"\t"<<endl;
     }
     float temp[3] = {0.0,0.0,0.0};
     float alpha = atof(argv[1]);
-    int xx = atoi(argv[2]);
     i = 0;
-    for(int j = 0;j < xx;j ++){
+    float xx = atof(argv[2]);
+    float s_theta = theta[0] + theta[1] + theta[2];
+    float _s_theta = 0.0;
+    int count = 0;
+    while(abs(J_theta(theta,x1,x2,y,num) - tempJ) / abs(J_theta(theta,x1,x2,y,num)) > xx){
+    //for(int j = 0;j < (int)xx;j ++){
         //DrawLine(coord,theta);
+        _s_theta = s_theta;
         tempJ = J_theta(theta,x1,x2,y,num);
         cout << "J=" << tempJ << endl;
         for(int k = 0;k < 50;k ++){
             if(i+k >= num)
                 i -= num;
-            temp[0] += alpha * (y[i+k] - h_x(theta,x1,x2,i+k));
-            temp[1] += alpha * (y[i+k] - h_x(theta,x1,x2,i+k)) * x1[i+k];
-            temp[2] += alpha * (y[i+k] - h_x(theta,x1,x2,i+k)) * x2[i+k];
+            temp[0] += y[i+k] - h_x(theta,x1,x2,i+k);
+            temp[1] += (y[i+k] - h_x(theta,x1,x2,i+k)) * x1[i+k];
+            temp[2] += (y[i+k] - h_x(theta,x1,x2,i+k)) * x2[i+k];
         }
         for(int k = 0;k < 3;k ++){
-            theta[k] += temp[k] / 50;
+            theta[k] += alpha * temp[k];
             temp[k] = 0.0;
             cout<<"theta["<<k<<"]:"<<theta[k]<<"\t";
         }
+        s_theta = theta[0] + theta[1] + theta[2];
         cout << endl;
         i += 50;
         if(i >= num)
             i -= num;
         //DrawLine(coord,theta);
+        count ++;
     }
+
+    cout <<count<<endl;
     DrawLine(coord,theta);
     //imshow("Coordinate",coord);
     waitKey();
