@@ -10,6 +10,7 @@
 #include <fstream>
 #include <cmath>
 #include <time.h>
+#include <assert.h>
 
 using namespace std;
 using namespace cv;
@@ -103,19 +104,33 @@ float h_x(float* theta,float* x1,float* x2,int i){
     return s;
 }
 
-float J_theta(float* theta,float* x1,float* x2,int* y,int num){
+float J_theta(float* theta,float* x1,float* x2,int* y,int num,float lambda){
     float J = 0.0;
     for(int i = 0;i < num ;i ++){
-        J -= y[i] * log(h_x(theta,x1,x2,i)) + (1-y[i]) * log(1 - h_x(theta,x1,x2,i));
+        J -= (y[i] * log(h_x(theta,x1,x2,i)) + (1-y[i]) * log(1 - h_x(theta,x1,x2,i)));
+        float t0 = theta[0] * theta[0];
+        //assert(t0 == t0);
+        float t1 = theta[1] * theta[1];
+        //assert(t1 == t1);
+        float t2 = theta[2] * theta[2];
+        //assert(t2 == t2);
+        J += lambda * (t0 + t1 + t2) / 2;
+        /*if(J != J){
+            cout << "lambda = " << lambda << "\t";
+            cout << "t0 = " << t0 << "\t";
+            cout << "t1 = " << t1 << "\t";
+            cout << "t2 = " << t2 << endl;
+        }
+        assert(J == J);*/
     }
-    return J/num;
+    return J / num;
 }
 
 void DrawLine(Mat& image,float* theta){
     Point A,B;
     A.x = 550;
-    A.y = 550 + ((100 * theta[1] + theta[0]) / theta[2]) * 5;
-    B.x = 50 - ((100 * theta[2] + theta[0]) / theta[1]) * 5;
+    A.y = 550 + ((1 * theta[1] + theta[0]) / theta[2]) * 500;
+    B.x = 50 - ((1 * theta[2] + theta[0]) / theta[1]) * 500;
     B.y = 50;
     line(image,A,B,255,1,LINE_AA);
     imshow("Coordinate",image);
@@ -133,7 +148,7 @@ void Normalize(float* x1,float*x2,int num){
     gap = max - min;
     for(int i = 0;i < num;i ++){
         x1[i] = (x1[i] - min) / gap;
-        cout<<"x1["<<i<<"]="<<x1[i]<<endl;
+        //cout<<"x1["<<i<<"]="<<x1[i]<<endl;
     }
 
     for(int i = 0;i < num;i ++){
@@ -145,7 +160,7 @@ void Normalize(float* x1,float*x2,int num){
     gap = max - min;
     for(int i = 0;i < num;i ++){
         x2[i] = (x2[i] - min) / gap;
-        cout<<"x2["<<i<<"]="<<x2[i]<<endl;
+        //cout<<"x2["<<i<<"]="<<x2[i]<<endl;
     }
 }
 
@@ -214,29 +229,32 @@ int main(int argc,char ** argv){
         }
     }
 
-    Normalize(x1,x2,i);
+    Normalize(x1,x2,num);
 
     float tempJ = 0.0;
     srand((unsigned)time(0));
     float theta[3] = {0.0,0.0,0.0};
     for(int j = 0;j < 3;j ++){
-        int yy = rand() % 100;
-        theta[j] = (float)yy / 100;
+        int yy = rand() % 200;
+        theta[j] = (float)yy / 100 - 1;
         cout<<"theta["<<j<<"]:"<<theta[j]<<"\t"<<endl;
     }
     float temp[3] = {0.0,0.0,0.0};
+    float lambda = 0.0001;
     float alpha = atof(argv[1]);
     i = 0;
     float xx = atof(argv[2]);
-    float s_theta = theta[0] + theta[1] + theta[2];
-    float _s_theta = 0.0;
+    //float s_theta = theta[0] + theta[1] + theta[2];
+    //float _s_theta = 0.0;
     int count = 0;
-    while(abs(J_theta(theta,x1,x2,y,num) - tempJ) / abs(J_theta(theta,x1,x2,y,num)) > xx){
+    cout << "J = " << J_theta(theta,x1,x2,y,num,lambda) << endl;
+    while(J_theta(theta,x1,x2,y,num,lambda) > xx){
+    //while(abs(J_theta(theta,x1,x2,y,num) - tempJ) / abs(J_theta(theta,x1,x2,y,num)) > xx){
     //for(int j = 0;j < (int)xx;j ++){
         //DrawLine(coord,theta);
-        _s_theta = s_theta;
-        tempJ = J_theta(theta,x1,x2,y,num);
-        cout << "J=" << tempJ << endl;
+        //_s_theta = s_theta;
+        tempJ = J_theta(theta,x1,x2,y,num,lambda);
+        //cout << "J=" << tempJ << endl;
         for(int k = 0;k < 50;k ++){
             if(i+k >= num)
                 i -= num;
@@ -245,20 +263,39 @@ int main(int argc,char ** argv){
             temp[2] += (y[i+k] - h_x(theta,x1,x2,i+k)) * x2[i+k];
         }
         for(int k = 0;k < 3;k ++){
-            theta[k] += alpha * temp[k];
+            theta[k] *= 1 - alpha * lambda / num;
+            theta[k] += alpha * temp[k] / num;
             temp[k] = 0.0;
-            cout<<"theta["<<k<<"]:"<<theta[k]<<"\t";
+            //cout<<"theta["<<k<<"]:"<<theta[k]<<"\t";
         }
-        s_theta = theta[0] + theta[1] + theta[2];
-        cout << endl;
+
+        /*float max = abs(theta[0]);
+        max = (abs(theta[1]) > max) ? abs(theta[1]) : max;
+        max = (abs(theta[2]) > max) ? abs(theta[2]) : max;
+        for(int k = 0;k < 3;k ++){
+            theta[k] /= max;
+        }*/
+        //s_theta = theta[0] + theta[1] + theta[2];
+        //cout << endl;
         i += 50;
         if(i >= num)
             i -= num;
         //DrawLine(coord,theta);
         count ++;
+        if(count % 10000 == 0){
+            cout << "已经循环" << count / 10000 << "万次" << endl;
+            cout << "J = " << J_theta(theta,x1,x2,y,num,lambda) << endl;
+            cout << "theta[0] = " << theta[0] << "\t";
+            cout << "theta[1] = " << theta[1] << "\t";
+            cout << "theta[2] = " << theta[2] << endl;
+        }
     }
 
-    cout <<count<<endl;
+    cout << "theta[0] = " << theta[0] << "\t";
+    cout << "theta[1] = " << theta[1] << "\t";
+    cout << "theta[2] = " << theta[2] << endl;
+    cout << "J = " << J_theta(theta,x1,x2,y,num,lambda) << endl;
+    cout << count <<endl;
     DrawLine(coord,theta);
     //imshow("Coordinate",coord);
     waitKey();
